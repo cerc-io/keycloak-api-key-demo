@@ -23,11 +23,13 @@ public class ApiKeyResource {
     private KeycloakSession session;
 
     private final String realmName;
+    private final String clientId;
 
     public ApiKeyResource(KeycloakSession session) {
         this.session = session;
-        String envRealmName = System.getenv("REALM_NAME");
+        String envRealmName = System.getenv("X_API_CHECK_REALM");
         this.realmName = Objects.isNull(envRealmName) || Objects.equals(System.getenv(envRealmName), "") ? "example" : envRealmName;
+        this.clientId = System.getenv("X_API_CHECK_CLIENT_ID");
     }
 
     @GET
@@ -49,6 +51,13 @@ public class ApiKeyResource {
             status = Response.Status.OK;
             UserModel user = matches.get(0);
             event.user(user);
+            if (null == this.clientId) {
+                event.client(session.getContext().getClient());
+            } else if ("%user_id%".equals(this.clientId)) {
+                event.client(user.getId());
+            } else {
+                event.client(this.clientId);
+            }
             event.success();
         } else {
             event.error(INVALID_API_KEY);
