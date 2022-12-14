@@ -43,6 +43,8 @@ public class ApiKeyResource {
         event.detail(Details.AUTH_METHOD, AUTH_METHOD);
         if (null == this.clientId || "%user_id%".equals(this.clientId)) {
             event.client(session.getContext().getClient());
+        } else if ("%api_key%".equals(this.clientId)) {
+            event.client(apiKey);
         } else {
             event.client(this.clientId);
         }
