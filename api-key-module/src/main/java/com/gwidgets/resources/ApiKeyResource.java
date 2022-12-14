@@ -41,6 +41,11 @@ public class ApiKeyResource {
 
         event.event(EventType.LOGIN);
         event.detail(Details.AUTH_METHOD, AUTH_METHOD);
+        if (null == this.clientId) {
+            event.client(session.getContext().getClient());
+        } else {
+            event.client(this.clientId);
+        }
 
         List<UserModel> matches = session.users()
                 .searchForUserByUserAttributeStream(session.realms().getRealm(realmName), "api-key", apiKey)
@@ -51,12 +56,8 @@ public class ApiKeyResource {
             status = Response.Status.OK;
             UserModel user = matches.get(0);
             event.user(user);
-            if (null == this.clientId) {
-                event.client(session.getContext().getClient());
-            } else if ("%user_id%".equals(this.clientId)) {
+            if ("%user_id%".equals(this.clientId)) {
                 event.client(user.getId());
-            } else {
-                event.client(this.clientId);
             }
             event.success();
         } else {
