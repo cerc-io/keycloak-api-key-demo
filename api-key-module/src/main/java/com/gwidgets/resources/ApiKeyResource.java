@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 
 public class ApiKeyResource {
     private static final String AUTH_METHOD = "X-API-KEY";
+    private static final String HDR_USER_ID = "X-User-Id";
     private static final String INVALID_API_KEY = "INVALID_API_KEY";
 
     private KeycloakSession session;
@@ -37,6 +38,7 @@ public class ApiKeyResource {
     public Response checkApiKey(@QueryParam("apiKey") String apiKey) {
         Response.Status status = Response.Status.UNAUTHORIZED;
         RealmModel realm = session.realms().getRealm(realmName);
+        UserModel user = null;
         EventBuilder event = new EventBuilder(realm, session, session.getContext().getConnection());
 
         event.event(EventType.LOGIN);
@@ -56,7 +58,7 @@ public class ApiKeyResource {
 
         if (matches.size() == 1) {
             status = Response.Status.OK;
-            UserModel user = matches.get(0);
+            user = matches.get(0);
             event.user(user);
             if ("%user_id%".equals(this.clientId)) {
                 event.client(user.getId());
@@ -66,6 +68,11 @@ public class ApiKeyResource {
             event.error(INVALID_API_KEY);
         }
 
-        return Response.status(status).type(MediaType.APPLICATION_JSON).build();
+        Response.ResponseBuilder builder = Response.status(status).type(MediaType.APPLICATION_JSON);
+        if (null != user) {
+            builder = builder.header(HDR_USER_ID, user.getId());
+        }
+
+        return builder.build();
     }
 }
