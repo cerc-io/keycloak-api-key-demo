@@ -13,6 +13,7 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -71,6 +72,15 @@ public class ApiKeyResource {
         Response.ResponseBuilder builder = Response.status(status).type(MediaType.APPLICATION_JSON);
         if (null != user) {
             builder = builder.header(HDR_USER_ID, user.getId());
+            Map<String, List<String>> attribs = user.getAttributes();
+            for (String key : attribs.keySet()) {
+                if (key.toLowerCase().startsWith("x-")) {
+                    List<String> values = attribs.get(key);
+                    if (null != values && !values.isEmpty()) {
+                        builder = builder.header(key, values.get(0));
+                    }
+                }
+            }
         }
 
         return builder.build();
