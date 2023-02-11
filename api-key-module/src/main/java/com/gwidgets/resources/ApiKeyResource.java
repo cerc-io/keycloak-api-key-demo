@@ -1,5 +1,6 @@
 package com.gwidgets.resources;
 
+import com.google.common.base.Strings;
 import org.keycloak.events.Details;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
@@ -21,22 +22,25 @@ public class ApiKeyResource {
     private static final String AUTH_METHOD = "X-API-KEY";
     private static final String HDR_USER_ID = "X-User-Id";
     private static final String INVALID_API_KEY = "INVALID_API_KEY";
+    private static final String PERMISSION_DENIED = "PERMISSION_DENIED";
 
     private KeycloakSession session;
 
     private final String realmName;
     private final String clientId;
+    private final String allAccessGroupName;
 
     public ApiKeyResource(KeycloakSession session) {
         this.session = session;
         String envRealmName = System.getenv("X_API_CHECK_REALM");
         this.realmName = Objects.isNull(envRealmName) || Objects.equals(System.getenv(envRealmName), "") ? "example" : envRealmName;
         this.clientId = System.getenv("X_API_CHECK_CLIENT_ID");
+        this.allAccessGroupName = System.getenv("X_API_ALL_ACCESS_GROUP");
     }
 
     @GET
     @Produces("application/json")
-    public Response checkApiKey(@QueryParam("apiKey") String apiKey) {
+    public Response checkApiKey(@QueryParam("apiKey") String apiKey, @QueryParam("memberOf") String groupName) {
         Response.Status status = Response.Status.UNAUTHORIZED;
         RealmModel realm = session.realms().getRealm(realmName);
         UserModel user = null;
@@ -53,18 +57,26 @@ public class ApiKeyResource {
         }
 
         List<UserModel> matches = session.users()
-                .searchForUserByUserAttributeStream(session.realms().getRealm(realmName), "api-key", apiKey)
+                .searchForUserByUserAttributeStream(realm, "api-key", apiKey)
                 .filter(UserModel::isEnabled)
                 .collect(Collectors.toList());
 
         if (matches.size() == 1) {
-            status = Response.Status.OK;
-            user = matches.get(0);
-            event.user(user);
-            if ("%user_id%".equals(this.clientId)) {
-                event.client(user.getId());
+            UserModel candidate = matches.get(0);
+
+            if (Strings.isNullOrEmpty(groupName) ||
+                    isMemberOf(realm, candidate, groupName) ||
+                    (!Strings.isNullOrEmpty(allAccessGroupName) && isMemberOf(realm, candidate, allAccessGroupName))) {
+                user = candidate;
+                event.user(user);
+                if ("%user_id%".equals(this.clientId)) {
+                    event.client(user.getId());
+                }
+                event.success();
+                status = Response.Status.OK;
+            } else {
+                event.error(PERMISSION_DENIED);
             }
-            event.success();
         } else {
             event.error(INVALID_API_KEY);
         }
@@ -84,5 +96,14 @@ public class ApiKeyResource {
         }
 
         return builder.build();
+    }
+
+    private boolean isMemberOf(RealmModel realm, UserModel user, String groupName) {
+        return !session.groups()
+                .getGroupsStream(realm)
+                .filter(g -> g.getName().equalsIgnoreCase(groupName))
+                .filter(user::isMemberOf)
+                .collect(Collectors.toList())
+                .isEmpty();
     }
 }
